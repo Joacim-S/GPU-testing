@@ -19,6 +19,36 @@ void check(cl_int e, const char* what = ""){
     }
 }
 
+
+void parse_input(std::string filename, uint** inputs, size_t wlsize, size_t wgsize, char* output) {
+//Parses parameters for running the kernel and saves them to given pointers.
+//Inputs is an array of pointers to arrays of uints starting with the length of the array.
+//0 Length implies the value is a constant.
+    std::string asmfile = filename + "asm";
+    std::string line = "; @";
+    std::ifstream asmin(asmfile);
+    if (!asmin.good()) {
+        std::cerr << "Failed to open file:" << asmfile << std::endl;
+        exit(EXIT_FAILURE);
+    }
+    size_t s;
+    while(line[2] == '@'){
+        std::getline(asmin, line);
+        if ((s = line.find("@input:"))) {
+            std::cout << s << std::endl;
+        }
+    }
+    asmin.close();
+
+    /*
+    for (int i=0; i<3; i++) {
+        wlsize[i] = atoi(&line[asmi]);
+        wgsize[i] = atoi(&line[asmi]);
+        asmi+=3;
+    }
+    */
+}
+
 int main(int argc, char *argv[]) {
     bool info = false;
     if (argc < 2) {
@@ -37,30 +67,11 @@ int main(int argc, char *argv[]) {
     }
     fin.close();
 
-    std::string asmfile = filename + "asm";
-    std::string line;
-    std::ifstream asmin(asmfile);
-    if (!asmin.good()) {
-        std::cerr << asmfile << " does not exist" << std::endl;
-        exit(EXIT_FAILURE);
-    }
-    size_t asmi;
-    while((asmi = line.find("@Config:")) == std::string::npos){
-        std::getline(asmin, line);
-    }
-    asmin.close();
 
-    while(line[asmi] != ' ')
-        asmi++;
-    asmi ++;
     size_t wlsize[3];
     size_t wgsize[3];
     
-    for (int i=0; i<3; i++) {
-        wlsize[i] = atoi(&line[asmi]);
-        wgsize[i] = atoi(&line[asmi]);
-        asmi+=3;
-    }
+
     
 
     cl_platform_id platform_id;

@@ -27,7 +27,6 @@ int main(int argc, char *argv[]) {
     }
 
     std::string filename = argv[1];
-    //Get from config
 
     std::uintmax_t filesize = std::filesystem::file_size(filename);
     char* il = new char[filesize];
@@ -99,8 +98,10 @@ int main(int argc, char *argv[]) {
         arg = new char[asize];
         args[i] = arg;
         check(clGetKernelArgInfo(kernel, i, CL_KERNEL_ARG_TYPE_NAME, asize, arg, NULL));
+        std::cout << arg << std::endl;
     }
 
+    
     uint A_h = 0;
     const uint B = 1;
     cl_mem A_d = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(uint), &A_h, &ret);

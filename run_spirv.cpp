@@ -1,5 +1,6 @@
 #include<bits/stdc++.h>
 #include <cctype>
+#include <ostream>
 #define CL_TARGET_OPENCL_VERSION 300
 
 #include <cstring>
@@ -20,7 +21,8 @@ void check(cl_int e, const char* what = ""){
 //Parses parameters for running the kernel and saves them to given pointers.
 //Inputs is an array of pointers to arrays of uints starting with the length of the array.
 //0 Length implies the value is a constant.
-void parse_input(std::string* filename, std::vector<char*> input_names, std::vector<uint*> inputs, size_t* wlsize, size_t* wgsize, std::string* output) {
+//Output is just a 
+int parse_input(std::string* filename, std::vector<char*>& input_names, std::vector<uint*>& inputs, size_t* wlsize, size_t* wgsize, char*& output) {
     std::string line = "@";
     std::ifstream asmin(*filename);
     if (!asmin.good()) {
@@ -31,6 +33,7 @@ void parse_input(std::string* filename, std::vector<char*> input_names, std::vec
     size_t ic = 0; //Input count
     while(line.find("@") != std::string::npos){
         std::getline(asmin, line);
+
         if ((li = line.find("@Input:")) != std::string::npos) {
             size_t p = line.find("%");
             s = line.find(" ", p) - p;
@@ -39,34 +42,49 @@ void parse_input(std::string* filename, std::vector<char*> input_names, std::vec
 
             size_t lb, rb, il = 1;
             li = line.find("=");
-            bool is_array = ((lb = line.find("{", li)) != std::string::npos);
+            bool is_array = (lb = line.find("{", li) != std::string::npos);
+
             if (is_array) {
-                rb = line.find("}", lb);
-                if (rb == std::string::npos) {
+                if ((rb = line.find("}", lb)) == std::string::npos) {
                     std::cerr << "Invalid input row in file:" << filename << std::endl << line << std::endl;
+                    return -1;
                 }
                 il += std::count(line.begin()+lb, line.begin()+rb, ','); //Input length
             }
+
             uint* input = new uint[il + 1];
             input[0] = is_array * il;
-            for (int i=0; i<il; i++) {
+            for (int i=1; i < il+1; i++) {
                 while (!std::isdigit(line[li])) 
                     li++;
                 input[i] = atoi(&line[li]);
                 while (std::isdigit(line[li]))
                     li++;
             }
+            inputs.push_back(input);
+            continue;
+        }
+
+        if ((li = line.find("@Output") != std::string::npos)) {
+            if((li = line.find(": ") == std::string::npos)) {
+                std::cerr << "Invalid input row in file:" << filename << std::endl << line << std::endl;
+                return -1;
+            }
+            li += 2;
+            s = 1 + line.length() - li;
+            output = new char[s];
+            strncpy(output, &line[li], s);
+            output[s] = '\0';
+            std::cout << output << std::endl;
+            continue;
+        }
+
+        if ((li = line.find("@Config")) != std::string::npos) {
+            //TODO
         }
     }
     asmin.close();
-
-    /*
-    for (int i=0; i<3; i++) {
-        wlsize[i] = atoi(&line[asmi]);
-        wgsize[i] = atoi(&line[asmi]);
-        asmi+=3;
-    }
-    */
+    return 0;
 }
 
 int main(int argc, char *argv[]) {
@@ -92,11 +110,16 @@ int main(int argc, char *argv[]) {
     size_t wgsize[3];
     std::string asmfile = filename + "asm";
     std::vector<uint*> inputs;
-    std::string output;
+    char* output;
     std::vector<char*> args;
 
-
-    parse_input(&asmfile, args, inputs, wlsize, wgsize, &output);
+    parse_input(&asmfile, args, inputs, wlsize, wgsize, output);
+    for (int i=0; i<inputs.size(); i++) {
+        for (int j=0; j<=inputs[i][0]; j++) {
+            std::cout << inputs[i][j];
+        } std::cout << std::endl;
+    }
+    std::cout << output << std::endl;
     exit(0);
 
     cl_platform_id platform_id;

@@ -1,12 +1,10 @@
-#include <cstddef>
-#include <cstdlib>
-#include <ostream>
-#include <string>
+#include<bits/stdc++.h>
+#include <cctype>
 #define CL_TARGET_OPENCL_VERSION 300
 
-#include <string>
+#include <cstring>
+#include <vector>
 #include <CL/cl.h>
-#include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -19,23 +17,45 @@ void check(cl_int e, const char* what = ""){
     }
 }
 
-
-void parse_input(std::string filename, uint** inputs, size_t wlsize, size_t wgsize, char* output) {
 //Parses parameters for running the kernel and saves them to given pointers.
 //Inputs is an array of pointers to arrays of uints starting with the length of the array.
 //0 Length implies the value is a constant.
-    std::string asmfile = filename + "asm";
-    std::string line = "; @";
-    std::ifstream asmin(asmfile);
+void parse_input(std::string* filename, std::vector<char*> input_names, std::vector<uint*> inputs, size_t* wlsize, size_t* wgsize, std::string* output) {
+    std::string line = "@";
+    std::ifstream asmin(*filename);
     if (!asmin.good()) {
-        std::cerr << "Failed to open file:" << asmfile << std::endl;
+        std::cerr << "Failed to open file:" << filename << std::endl;
         exit(EXIT_FAILURE);
     }
-    size_t s;
-    while(line[2] == '@'){
+    size_t li, s;
+    size_t ic = 0; //Input count
+    while(line.find("@") != std::string::npos){
         std::getline(asmin, line);
-        if ((s = line.find("@input:"))) {
-            std::cout << s << std::endl;
+        if ((li = line.find("@Input:")) != std::string::npos) {
+            size_t p = line.find("%");
+            s = line.find(" ", p) - p;
+            input_names.push_back(new char[s+1]);
+            strncpy(input_names[ic], &line[p], s);
+
+            size_t lb, rb, il = 1;
+            li = line.find("=");
+            bool is_array = ((lb = line.find("{", li)) != std::string::npos);
+            if (is_array) {
+                rb = line.find("}", lb);
+                if (rb == std::string::npos) {
+                    std::cerr << "Invalid input row in file:" << filename << std::endl << line << std::endl;
+                }
+                il += std::count(line.begin()+lb, line.begin()+rb, ','); //Input length
+            }
+            uint* input = new uint[il + 1];
+            input[0] = is_array * il;
+            for (int i=0; i<il; i++) {
+                while (!std::isdigit(line[li])) 
+                    li++;
+                input[i] = atoi(&line[li]);
+                while (std::isdigit(line[li]))
+                    li++;
+            }
         }
     }
     asmin.close();
@@ -70,9 +90,14 @@ int main(int argc, char *argv[]) {
 
     size_t wlsize[3];
     size_t wgsize[3];
-    
+    std::string asmfile = filename + "asm";
+    std::vector<uint*> inputs;
+    std::string output;
+    std::vector<char*> args;
 
-    
+
+    parse_input(&asmfile, args, inputs, wlsize, wgsize, &output);
+    exit(0);
 
     cl_platform_id platform_id;
     cl_uint num_platforms;
@@ -81,36 +106,41 @@ int main(int argc, char *argv[]) {
     cl_int ret;
 
     //Create platfrom and context build program
-    check(clGetPlatformIDs(1, &platform_id,&num_platforms));
-    check(clGetDeviceIDs(platform_id, CL_DEVICE_TYPE_GPU, 1, &device_id, &num_devices));
+    check(clGetPlatformIDs(1, &platform_id,&num_platforms), "platformID");
+    check(clGetDeviceIDs(platform_id, CL_DEVICE_TYPE_GPU, 1, &device_id, &num_devices), "DeviceID");
     cl_context context = clCreateContext(NULL, 1, &device_id, NULL, NULL, &ret);
-    check(ret);
+    check(ret, "context");
     cl_program program = clCreateProgramWithIL(context, il, filesize, &ret);
-    check(ret);
-    check(clBuildProgram(program, 1, &device_id, NULL, NULL, NULL));
+    check(ret, "program");
+    check(clBuildProgram(program, 1, &device_id, NULL, NULL, NULL), "Build program");
 
     //Get kernel name
     size_t pname_size;
-    clGetProgramInfo(program, CL_PROGRAM_KERNEL_NAMES, 0, NULL, &pname_size);
+    check(clGetProgramInfo(program, CL_PROGRAM_KERNEL_NAMES, 0, NULL, &pname_size), "Program info size");
     char* pname = new char[pname_size];
-    clGetProgramInfo(program, CL_PROGRAM_KERNEL_NAMES, pname_size, pname, NULL);
+    check(clGetProgramInfo(program, CL_PROGRAM_KERNEL_NAMES, pname_size, pname, NULL), "Program info");
 
     //Create kernel
     cl_kernel kernel = clCreateKernel(program, pname, &ret);
+    check(ret, "Create kernel");
 
+    /*
     cl_uint num_args;
     size_t asize;
     char **args;
     char *arg;
-    clGetKernelInfo(kernel, CL_KERNEL_NUM_ARGS, sizeof(cl_uint), &num_args, NULL);
+    check(clGetKernelInfo(kernel, CL_KERNEL_NUM_ARGS, sizeof(cl_uint), &num_args, NULL));
     args = new char*[num_args];
     for (int i=0; i<num_args; i++) {
-        check(clGetKernelArgInfo(kernel, i, CL_KERNEL_ARG_TYPE_NAME, 0, NULL, &asize));
+        std::cout << num_args << std::endl;
+        check(clGetKernelArgInfo(kernel, i, CL_KERNEL_ARG_TYPE_NAME, 0, NULL, &asize), "argtypesize");
         arg = new char[asize];
         args[i] = arg;
-        check(clGetKernelArgInfo(kernel, i, CL_KERNEL_ARG_TYPE_NAME, asize, arg, NULL));
+        check(clGetKernelArgInfo(kernel, i, CL_KERNEL_ARG_TYPE_NAME, asize, arg, NULL), "argtypename");
         std::cout << arg << std::endl;
     }
+    exit(0);
+    */
 
     
     uint A_h = 0;
@@ -121,9 +151,10 @@ int main(int argc, char *argv[]) {
     check(ret, "arg0");
     ret = clSetKernelArg(kernel, 1, sizeof(uint), &B);
     check(ret, "arg1");
-    cl_command_queue q = clCreateCommandQueueWithProperties(context, device_id, NULL, &ret);
+    cl_command_queue q = clCreateCommandQueueWithProperties(context, device_id, NULL, &ret); //CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE
     check(ret, "q");
 
+    //Command buffers?
     ret = clEnqueueNDRangeKernel(q, kernel, 3, NULL, wgsize, wlsize, 0, NULL, NULL);
     if (ret != CL_SUCCESS){
         printf("OpenCL error executing kernel: %d\n", ret);
@@ -140,7 +171,6 @@ int main(int argc, char *argv[]) {
     check(clReleaseContext(context));
     delete[] il;
     delete[] pname;
-    for (int i=0; i<num_args; i++){
+    for (int i=0; i<args.size(); i++)
         delete[] args[i];
-    }
 }

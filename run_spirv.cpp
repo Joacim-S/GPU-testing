@@ -34,7 +34,8 @@ int parseInput(std::string& filename, std::vector<char*>& input_names, std::vect
             size_t p = line.find("%");
             s = line.find(" ", p) - p;
             input_names.push_back(new char[s+1]);
-            strncpy(input_names[ic++], &line[p], s);
+            strncpy(input_names[ic], &line[p], s);
+            input_names[ic++][s] = '\0';
 
             size_t lb, rb, il = 1;
             li = line.find("=");

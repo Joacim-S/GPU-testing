@@ -1,14 +1,8 @@
 #include<bits/stdc++.h>
-#include <cctype>
-#include <ostream>
 #define CL_TARGET_OPENCL_VERSION 300
 
-#include <cstring>
 #include <vector>
 #include <CL/cl.h>
-#include <filesystem>
-#include <fstream>
-#include <iostream>
 
 void check(cl_int e, const char* what = ""){
     if(e != CL_SUCCESS){
@@ -22,23 +16,25 @@ void check(cl_int e, const char* what = ""){
 //Inputs is an array of pointers to arrays of uints starting with the length of the array.
 //0 Length implies the value is a constant.
 //Output is just a 
-int parse_input(std::string* filename, std::vector<char*>& input_names, std::vector<uint*>& inputs, size_t* wlsize, size_t* wgsize, char*& output) {
-    std::string line = "@";
-    std::ifstream asmin(*filename);
+int parseInput(std::string& filename, std::vector<char*>& input_names, std::vector<uint*>& inputs, size_t* wlsize, size_t* wgsize, char*& output) {
+    #define IN "@Input:"
+    #define OUT "@Output:"
+    #define CONFIG "@Config:"
+
+    std::ifstream asmin(filename);
     if (!asmin.good()) {
         std::cerr << "Failed to open file:" << filename << std::endl;
         exit(EXIT_FAILURE);
     }
-    size_t li, s;
-    size_t ic = 0; //Input count
+    size_t li, s, ic = 0;
+    std::string line;
+    std::getline(asmin, line);
     while(line.find("@") != std::string::npos){
-        std::getline(asmin, line);
-
-        if ((li = line.find("@Input:")) != std::string::npos) {
+        if ((li = line.find(IN)) != std::string::npos) {
             size_t p = line.find("%");
             s = line.find(" ", p) - p;
             input_names.push_back(new char[s+1]);
-            strncpy(input_names[ic], &line[p], s);
+            strncpy(input_names[ic++], &line[p], s);
 
             size_t lb, rb, il = 1;
             li = line.find("=");
@@ -62,26 +58,32 @@ int parse_input(std::string* filename, std::vector<char*>& input_names, std::vec
                     li++;
             }
             inputs.push_back(input);
-            continue;
         }
 
-        if ((li = line.find("@Output") != std::string::npos)) {
-            if((li = line.find(": ") == std::string::npos)) {
-                std::cerr << "Invalid input row in file:" << filename << std::endl << line << std::endl;
-                return -1;
-            }
-            li += 2;
+        else if ((li = line.find(OUT)) != std::string::npos) {
+            li += sizeof(OUT);
             s = 1 + line.length() - li;
             output = new char[s];
             strncpy(output, &line[li], s);
             output[s] = '\0';
-            std::cout << output << std::endl;
-            continue;
         }
 
-        if ((li = line.find("@Config")) != std::string::npos) {
-            //TODO
+        else if ((li = line.find(CONFIG)) != std::string::npos) {
+            li += sizeof(CONFIG);
+            for (int i=0; i < 3; i++) {
+                while (!std::isdigit(line[li]))
+                    li++;
+                size_t d = atol(&line[li]);
+                wlsize[i] = d;
+                wgsize[i] = d;
+                
+                while (std::isdigit(line[li]))
+                    li++;
+            }
         }
+        else
+            std::cerr << "Invalid input row in file:" << filename << std::endl << line << std::endl;
+        std::getline(asmin, line);
     }
     asmin.close();
     return 0;
@@ -111,16 +113,22 @@ int main(int argc, char *argv[]) {
     std::string asmfile = filename + "asm";
     std::vector<uint*> inputs;
     char* output;
-    std::vector<char*> args;
+    std::vector<char*> arg_names;
 
-    parse_input(&asmfile, args, inputs, wlsize, wgsize, output);
+    parseInput(asmfile, arg_names, inputs, wlsize, wgsize, output);
+
+    /* Code for checking parsing
     for (int i=0; i<inputs.size(); i++) {
+        std::cout << arg_names[i] << std::endl;
         for (int j=0; j<=inputs[i][0]; j++) {
             std::cout << inputs[i][j];
         } std::cout << std::endl;
     }
-    std::cout << output << std::endl;
-    exit(0);
+    for (int i=0; i<3; i++) {
+        std::cout << wlsize[i] << " ";
+        std::cout << wgsize[i] << std::endl;
+    }
+    */
 
     cl_platform_id platform_id;
     cl_uint num_platforms;
@@ -147,7 +155,7 @@ int main(int argc, char *argv[]) {
     cl_kernel kernel = clCreateKernel(program, pname, &ret);
     check(ret, "Create kernel");
 
-    /*
+    /* Code for getting kernel arg info from the kernel object.
     cl_uint num_args;
     size_t asize;
     char **args;
@@ -162,18 +170,33 @@ int main(int argc, char *argv[]) {
         check(clGetKernelArgInfo(kernel, i, CL_KERNEL_ARG_TYPE_NAME, asize, arg, NULL), "argtypename");
         std::cout << arg << std::endl;
     }
-    exit(0);
     */
 
+    //Initialize memory and set kernel args.
+    std::vector<std::vector<uint>> args_h;
+    std::vector<cl_mem> args_d;
+    std::vector<uint> constArgs_h;
+    int ci = 0;
+    for (int i=0; i<inputs.size(); i++) {
+        int l = inputs[i][0];
+        if (l) {
+            std::vector<uint> arg;
+            for (int j=0; j<l; j++) {
+                arg.push_back(inputs[i][j+1]);
+            }
+            args_h.push_back(arg);
+            cl_mem arg_d = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, l*sizeof(uint), arg.data(), &ret);
+            check(ret, "Create buffer");
+            args_d.push_back(arg_d);
+            check(clSetKernelArg(kernel, i, sizeof(cl_mem), &arg_d), "Set arg");
+        }
+        else {
+            constArgs_h.push_back(inputs[i][1]);
+            check(clSetKernelArg(kernel, i, sizeof(uint), &constArgs_h[ci++]), "Set const arg");
+        }
+    }
     
-    uint A_h = 0;
-    const uint B = 1;
-    cl_mem A_d = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(uint), &A_h, &ret);
-    check(ret, "create buffer");
-    ret = clSetKernelArg(kernel, 0, sizeof(cl_mem), &A_d);
-    check(ret, "arg0");
-    ret = clSetKernelArg(kernel, 1, sizeof(uint), &B);
-    check(ret, "arg1");
+
     cl_command_queue q = clCreateCommandQueueWithProperties(context, device_id, NULL, &ret); //CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE
     check(ret, "q");
 
@@ -184,16 +207,30 @@ int main(int argc, char *argv[]) {
         exit(1);
     }
     check(clFinish(q));
-    check(clEnqueueReadBuffer(q, A_d, true, 0, sizeof(uint), &A_h, 0, NULL, NULL), "read");
-    check(clFinish(q));
-    std::cout << A_h << std::endl;
-    check(clReleaseMemObject(A_d), "memrelease");
+    std::cout << OUT  << " " << output << std::endl;
+    std::cout << "Result:" << std::endl;
+    for (int i=0; i<args_d.size(); i++) {
+        check(clEnqueueReadBuffer(q, args_d[i], true, 0, sizeof(uint) * args_h[i].size(), args_h[i].data(), 0, NULL, NULL), "read");
+        check(clFinish(q));
+        std::cout << arg_names[i] << ": ";
+        for (int j=0; j<args_h[i].size(); j++) {
+            std::cout << args_h[i][j] << " ";
+        }
+        std::cout << std::endl;
+    }
+    for (int i=0; i<args_d.size(); i++) {
+        check(clReleaseMemObject(args_d[i]), "memrelease");
+    }
+    
     check(clReleaseKernel(kernel), "kernelrelease");
     check(clReleaseProgram(program));
     check(clReleaseCommandQueue(q));
     check(clReleaseContext(context));
+
     delete[] il;
     delete[] pname;
-    for (int i=0; i<args.size(); i++)
-        delete[] args[i];
+    for (int i=0; i<arg_names.size(); i++) {
+        delete[] arg_names[i];
+        delete[] inputs[i];
+    }
 }

@@ -12,12 +12,6 @@ void check(cl_int e, const char* what = ""){
     }
 }
 
-//Parses parameters for running the kernel and saves them to given pointers.
-//Inputs is an array of pointers to arrays of uints starting with the length of the array.
-//0 Length implies the value is a constant.
-//Output is just a 
-
-
 int main(int argc, char *argv[]) {
     #define OUT "@Output:"
     if (argc < 2) {

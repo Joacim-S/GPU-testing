@@ -5,6 +5,9 @@
 #include <fstream>
 #include "fileutils.h"
 
+//Parses parameters for running the kernel and saves them to given pointers.
+//Inputs is an array of pointers to arrays of uints starting with the length of the array.
+//0 Length implies the value is a constant.
 int parseInput(std::string& asmpath, std::vector<char*>& input_names, std::vector<uint*>& inputs, size_t* wlsize, size_t* wgsize, char*& output) {
     #define IN "@Input:"
     #define OUT "@Output:"
@@ -85,6 +88,7 @@ int parseInput(std::string& asmpath, std::vector<char*>& input_names, std::vecto
     return 0;
 }
 
+//Forms the path to a corresponding spvasm file
 int getAsmPath(std::string& spvpath, std::string& asmpath) {
     #define SPV_DIR "spirv/spv"
     #define SPVASM_DIR "spirv/spvasm/"

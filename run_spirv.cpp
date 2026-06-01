@@ -1,3 +1,5 @@
+#include <cstddef>
+#include <cstdlib>
 #define CL_TARGET_OPENCL_VERSION 300
 #include<bits/stdc++.h>
 #include "fileutils.h"
@@ -14,12 +16,15 @@ void check(cl_int e, const char* what = ""){
 
 int main(int argc, char *argv[]) {
     #define OUT "@Output:"
-    if (argc < 2) {
-        std::cout << "usage: atomic.cpp <spv filename>" << std::endl;
+    if (argc < 2 || argc > 4) {
+        std::cout << "usage: atomic.cpp <strind: spv file path (required)> <int: concurrent kernels> <int: iterations>" << std::endl;
         exit(1);
     }
-
     std::string spvpath = argv[1];
+
+    size_t kernel_count = argc > 2 ? atol(argv[2]): 1;
+    size_t iterations = argc == 4 ? atol(argv[3]) : 1;
+
     std::uintmax_t filesize = std::filesystem::file_size(spvpath);
     char* il = new char[filesize];
     std::ifstream fin(spvpath, std::ios::binary);
@@ -61,9 +66,12 @@ int main(int argc, char *argv[]) {
     char* pname = new char[pname_size];
     check(clGetProgramInfo(program, CL_PROGRAM_KERNEL_NAMES, pname_size, pname, NULL), "Program info");
 
-    //Create kernel
-    cl_kernel kernel = clCreateKernel(program, pname, &ret);
-    check(ret, "Create kernel");
+    //Create kernels
+    cl_kernel* kernels = new cl_kernel[kernel_count];
+    for (int i = 0; i < 1; i++) { //TODO: After implementing multiple kernels elsewhere, replace 1 with kernel_count.
+        kernels[i] = clCreateKernel(program, pname, &ret);
+        check(ret, "Create kernel");
+    }
 
 
     //Initialize memory and set kernel args.
@@ -71,6 +79,7 @@ int main(int argc, char *argv[]) {
     std::vector<cl_mem> args_d;
     std::vector<uint> constArgs_h;
     int ci = 0;
+    //TODO:
     for (int i=0; i<inputs.size(); i++) {
         int l = inputs[i][0];
         if (l) {
@@ -82,11 +91,11 @@ int main(int argc, char *argv[]) {
             cl_mem arg_d = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, l*sizeof(uint), arg.data(), &ret);
             check(ret, "Create buffer");
             args_d.push_back(arg_d);
-            check(clSetKernelArg(kernel, i, sizeof(cl_mem), &arg_d), "Set arg");
+            check(clSetKernelArg(kernels[0], i, sizeof(cl_mem), &arg_d), "Set arg");
         }
         else {
             constArgs_h.push_back(inputs[i][1]);
-            check(clSetKernelArg(kernel, i, sizeof(uint), &constArgs_h[ci++]), "Set const arg");
+            check(clSetKernelArg(kernels[0], i, sizeof(uint), &constArgs_h[ci++]), "Set const arg");
         }
     }
     
@@ -95,7 +104,7 @@ int main(int argc, char *argv[]) {
     check(ret, "q");
 
     //Command buffers?
-    ret = clEnqueueNDRangeKernel(q, kernel, 1, NULL, wgsize, wlsize, 0, NULL, NULL);
+    ret = clEnqueueNDRangeKernel(q, kernels[0], 1, NULL, wgsize, wlsize, 0, NULL, NULL);
     if (ret != CL_SUCCESS){
         printf("OpenCL error executing kernel: %d\n", ret);
         exit(1);
@@ -116,7 +125,7 @@ int main(int argc, char *argv[]) {
         check(clReleaseMemObject(args_d[i]), "memrelease");
     }
     
-    check(clReleaseKernel(kernel), "kernelrelease");
+    check(clReleaseKernel(kernels[0]), "kernelrelease");
     check(clReleaseProgram(program));
     check(clReleaseCommandQueue(q));
     check(clReleaseContext(context));

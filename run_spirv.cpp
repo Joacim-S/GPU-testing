@@ -15,7 +15,6 @@ void check(cl_int e, const char* what = ""){
 }
 
 int main(int argc, char *argv[]) {
-    #define OUT "@Output:"
     if (argc < 2 || argc > 4) {
         std::cout << "usage: atomic.cpp <strind: spv file path (required)> <int: concurrent kernels> <int: iterations>" << std::endl;
         exit(1);
@@ -39,7 +38,8 @@ int main(int argc, char *argv[]) {
     size_t wlsize[1];
     size_t wgsize[1];
     std::vector<uint*> inputs;
-    char* output;
+    char* output = new char[1];
+    output[0] = '\0';
     std::vector<char*> arg_names;
 
     parseInput(asmpath, arg_names, inputs, wlsize, wgsize, output);
@@ -110,7 +110,7 @@ int main(int argc, char *argv[]) {
         exit(1);
     }
     check(clFinish(q));
-    std::cout << OUT  << " " << output << std::endl;
+    std::cout << OUT << output << std::endl;
     std::cout << "Result:" << std::endl;
     for (int i=0; i<args_d.size(); i++) {
         check(clEnqueueReadBuffer(q, args_d[i], true, 0, sizeof(uint) * args_h[i].size(), args_h[i].data(), 0, NULL, NULL), "read");

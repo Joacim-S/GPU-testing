@@ -9,10 +9,6 @@
 //Inputs is an array of pointers to arrays of uints starting with the length of the array.
 //0 Length implies the value is a constant.
 int parseInput(std::string& asmpath, std::vector<char*>& input_names, std::vector<uint*>& inputs, size_t* wlsize, size_t* wgsize, char*& output) {
-    #define IN "@Input:"
-    #define OUT "@Output:"
-    #define CONFIG "@Config:"
-    #define FILTER "@Filter:"
 
     std::ifstream asmin(asmpath);
     if (!asmin.good()) {
@@ -21,8 +17,7 @@ int parseInput(std::string& asmpath, std::vector<char*>& input_names, std::vecto
     }
     size_t li, s, ic = 0;
     std::string line;
-    std::getline(asmin, line);
-    while(line.find("@") != std::string::npos){
+    while (std::getline(asmin, line)){
         if ((li = line.find(IN)) != std::string::npos) {
             size_t p = line.find("%");
             s = line.find(" ", p) - p;
@@ -55,16 +50,17 @@ int parseInput(std::string& asmpath, std::vector<char*>& input_names, std::vecto
         }
 
         else if ((li = line.find(OUT)) != std::string::npos) {
-            li += sizeof(OUT);
-            s = 1 + line.length() - li;
-            output = new char[s];
+            li += strlen(OUT);
+            s = line.length() - li;
+            output = new char[s+1];
             strncpy(output, &line[li], s);
             output[s] = '\0';
+            std::cout << output << std::endl;
         }
 
         else if ((li = line.find(CONFIG)) != std::string::npos) {
             size_t config[3];
-            li += sizeof(CONFIG);
+            li += strlen(CONFIG);
             for (int i=0; i < 3; i++) {
                 while (!std::isdigit(line[li]))
                     li++;
@@ -80,9 +76,6 @@ int parseInput(std::string& asmpath, std::vector<char*>& input_names, std::vecto
         else if ((li = line.find(FILTER)) != std::string::npos) {
             //TODO
         }
-        else
-            std::cerr << "Invalid input row in file:" << asmpath << std::endl << line << std::endl;
-        std::getline(asmin, line);
     }
     asmin.close();
     return 0;

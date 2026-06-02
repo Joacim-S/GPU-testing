@@ -67,7 +67,7 @@ int main(int argc, char *argv[]) {
 
     //Create kernels
     cl_kernel* kernels = new cl_kernel[kernel_count];
-    for (int i = 0; i < kernel_count; i++) { //TODO: After implementing multiple kernels elsewhere, replace 1 with kernel_count.
+    for (int i = 0; i < kernel_count; i++) {
         kernels[i] = clCreateKernel(program, pname, &ret);
         check(ret, "Create kernel");
     }
@@ -82,7 +82,6 @@ int main(int argc, char *argv[]) {
     }
     std::vector<std::vector<uint>> args_h(kernel_count * arg_count);
     std::vector<cl_mem> args_d(kernel_count * arg_count);
-    //TODO:
     for (int k=0; k<kernel_count; k++) {
         int ci = 0;
         for (int i=0; i<inputs.size(); i++) {
@@ -120,7 +119,7 @@ int main(int argc, char *argv[]) {
         std::cout << "Result:" << std::endl;
         for (int i=0; i<arg_count; i++) {
             check(clEnqueueReadBuffer(q, args_d[i + ko], true, 0, sizeof(uint) * args_h[i + ko].size(), args_h[i + ko].data(), 0, NULL, NULL), "read");
-            std::cout << arg_names[i] << ": ";
+            std::cout << arg_names[i] << ": "; //TODO: Do something smarter than assuming non-constant inputs appear first.
             for (int j=0; j<args_h[i + ko].size(); j++) {
                 std::cout << args_h[i + ko][j] << " ";
             }

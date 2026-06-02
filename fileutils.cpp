@@ -6,7 +6,7 @@
 #include "fileutils.h"
 
 //Parses parameters for running the kernel and saves them to given pointers.
-//Inputs is an array of pointers to arrays of uints starting with the length of the array.
+//Inputs is a vector of uint arrays starting with the length of the array.
 //0 Length implies the value is a constant.
 int parseInput(std::string& asmpath, std::vector<char*>& input_names, std::vector<uint*>& inputs, size_t* wlsize, size_t* wgsize, char*& output) {
 
@@ -55,7 +55,6 @@ int parseInput(std::string& asmpath, std::vector<char*>& input_names, std::vecto
             output = new char[s+1];
             strncpy(output, &line[li], s);
             output[s] = '\0';
-            std::cout << output << std::endl;
         }
 
         else if ((li = line.find(CONFIG)) != std::string::npos) {

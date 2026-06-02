@@ -1,5 +1,4 @@
 #include <cstddef>
-#include <cstdlib>
 #define CL_TARGET_OPENCL_VERSION 300
 #include<bits/stdc++.h>
 #include "fileutils.h"
@@ -68,34 +67,40 @@ int main(int argc, char *argv[]) {
 
     //Create kernels
     cl_kernel* kernels = new cl_kernel[kernel_count];
-    for (int i = 0; i < 1; i++) { //TODO: After implementing multiple kernels elsewhere, replace 1 with kernel_count.
+    for (int i = 0; i < kernel_count; i++) { //TODO: After implementing multiple kernels elsewhere, replace 1 with kernel_count.
         kernels[i] = clCreateKernel(program, pname, &ret);
         check(ret, "Create kernel");
     }
 
 
     //Initialize memory and set kernel args.
-    std::vector<std::vector<uint>> args_h;
-    std::vector<cl_mem> args_d;
     std::vector<uint> constArgs_h;
-    int ci = 0;
-    //TODO:
+    size_t arg_count = 0;
     for (int i=0; i<inputs.size(); i++) {
-        int l = inputs[i][0];
-        if (l) {
-            std::vector<uint> arg;
-            for (int j=0; j<l; j++) {
-                arg.push_back(inputs[i][j+1]);
+        if (inputs[i][0]) arg_count += 1;
+        else constArgs_h.push_back(inputs[i][1]);
+    }
+    std::vector<std::vector<uint>> args_h(kernel_count * arg_count);
+    std::vector<cl_mem> args_d(kernel_count * arg_count);
+    //TODO:
+    for (int k=0; k<kernel_count; k++) {
+        int ci = 0;
+        for (int i=0; i<inputs.size(); i++) {
+            int l = inputs[i][0];
+            if (l) {
+                std::vector<uint> arg(l);
+                for (int j=0; j<l; j++) {
+                    arg[j] = inputs[i][j+1];
+                }
+                args_h[i + k * arg_count] = arg;
+                cl_mem arg_d = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, l*sizeof(uint), arg.data(), &ret);
+                check(ret, "Create buffer");
+                args_d[i + k * arg_count] = arg_d;
+                check(clSetKernelArg(kernels[k], i, sizeof(cl_mem), &arg_d), "Set arg");
             }
-            args_h.push_back(arg);
-            cl_mem arg_d = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, l*sizeof(uint), arg.data(), &ret);
-            check(ret, "Create buffer");
-            args_d.push_back(arg_d);
-            check(clSetKernelArg(kernels[0], i, sizeof(cl_mem), &arg_d), "Set arg");
-        }
-        else {
-            constArgs_h.push_back(inputs[i][1]);
-            check(clSetKernelArg(kernels[0], i, sizeof(uint), &constArgs_h[ci++]), "Set const arg");
+            else {
+                check(clSetKernelArg(kernels[k], i, sizeof(uint), &constArgs_h[ci++]), "Set const arg");
+            }
         }
     }
     
@@ -104,28 +109,27 @@ int main(int argc, char *argv[]) {
     check(ret, "q");
 
     //Command buffers?
-    ret = clEnqueueNDRangeKernel(q, kernels[0], 1, NULL, wgsize, wlsize, 0, NULL, NULL);
-    if (ret != CL_SUCCESS){
-        printf("OpenCL error executing kernel: %d\n", ret);
-        exit(1);
+    for (int k=0; k<kernel_count; k++) {
+        ret = clEnqueueNDRangeKernel(q, kernels[k], 1, NULL, wgsize, wlsize, 0, NULL, NULL);
+        check(ret, "Enqueue");
     }
     check(clFinish(q));
-    std::cout << OUT << output << std::endl;
-    std::cout << "Result:" << std::endl;
-    for (int i=0; i<args_d.size(); i++) {
-        check(clEnqueueReadBuffer(q, args_d[i], true, 0, sizeof(uint) * args_h[i].size(), args_h[i].data(), 0, NULL, NULL), "read");
-        check(clFinish(q));
-        std::cout << arg_names[i] << ": ";
-        for (int j=0; j<args_h[i].size(); j++) {
-            std::cout << args_h[i][j] << " ";
+    for (int k=0; k<kernel_count; k++) {
+        int ko = k * arg_count;
+        std::cout << OUT << output << std::endl;
+        std::cout << "Result:" << std::endl;
+        for (int i=0; i<arg_count; i++) {
+            check(clEnqueueReadBuffer(q, args_d[i + ko], true, 0, sizeof(uint) * args_h[i + ko].size(), args_h[i + ko].data(), 0, NULL, NULL), "read");
+            std::cout << arg_names[i] << ": ";
+            for (int j=0; j<args_h[i + ko].size(); j++) {
+                std::cout << args_h[i + ko][j] << " ";
+            }
+            std::cout << std::endl;
         }
-        std::cout << std::endl;
     }
-    for (int i=0; i<args_d.size(); i++) {
-        check(clReleaseMemObject(args_d[i]), "memrelease");
-    }
-    
-    check(clReleaseKernel(kernels[0]), "kernelrelease");
+
+    for (int i=0; i<args_d.size(); i++) check(clReleaseMemObject(args_d[i]), "memrelease");
+    for (int i=0; i<kernel_count; i++) check(clReleaseKernel(kernels[i]), "kernelrelease");
     check(clReleaseProgram(program));
     check(clReleaseCommandQueue(q));
     check(clReleaseContext(context));

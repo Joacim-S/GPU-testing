@@ -102,15 +102,19 @@ int main(int argc, char *argv[]) {
         }
     }
     
-
-    cl_command_queue q = clCreateCommandQueueWithProperties(context, device_id, NULL, &ret); //CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE
+    cl_queue_properties properties[] = { CL_QUEUE_PROPERTIES, CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE, 0 };
+    cl_command_queue q = clCreateCommandQueueWithProperties(context, device_id, properties, &ret);
     check(ret, "q");
 
     //Command buffers?
+    cl_event user_event = clCreateUserEvent(context, &ret);
+    check(ret, "Create event");
     for (int k=0; k<kernel_count; k++) {
-        ret = clEnqueueNDRangeKernel(q, kernels[k], 1, NULL, wgsize, wlsize, 0, NULL, NULL);
+        ret = clEnqueueNDRangeKernel(q, kernels[k], 1, NULL, wgsize, wlsize, 1, &user_event, NULL);
         check(ret, "Enqueue");
     }
+    std::cout << "Enqueued" << std::endl;
+    clSetUserEventStatus(user_event, CL_COMPLETE);
     check(clFinish(q));
     for (int k=0; k<kernel_count; k++) {
         int ko = k * arg_count;

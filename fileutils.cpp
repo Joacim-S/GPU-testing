@@ -21,15 +21,15 @@ int parseInput(std::string& asmpath, std::vector<char*>& input_names, std::vecto
         if ((li = line.find(IN)) != std::string::npos) {
             size_t p = line.find("%");
             s = line.find(" ", p) - p;
-            input_names.push_back(new char[s+1]);
-            strncpy(input_names[ic], &line[p], s);
-            input_names[ic++][s] = '\0';
 
             size_t lb, rb, il = 1;
             li = line.find("=");
             bool is_array = (lb = line.find("{", li) != std::string::npos);
 
             if (is_array) {
+                input_names.push_back(new char[s+1]);
+                strncpy(input_names[ic], &line[p], s);
+                input_names[ic++][s] = '\0';
                 if ((rb = line.find("}", lb)) == std::string::npos) {
                     std::cerr << "Invalid input row in file:" << asmpath << std::endl << line << std::endl;
                     return -1;

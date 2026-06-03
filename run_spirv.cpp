@@ -118,7 +118,7 @@ int main(int argc, char *argv[]) {
         std::cout << "Result:" << std::endl;
         for (int i=0; i<arg_count; i++) {
             check(clEnqueueReadBuffer(q, args_d[i + ko], true, 0, sizeof(uint) * args_h[i + ko].size(), args_h[i + ko].data(), 0, NULL, NULL), "read");
-            std::cout << arg_names[i] << ": "; //TODO: Do something smarter than assuming non-constant inputs appear first.
+            std::cout << arg_names[i] << ": ";
             for (int j=0; j<args_h[i + ko].size(); j++) {
                 std::cout << args_h[i + ko][j] << " ";
             }
@@ -127,7 +127,9 @@ int main(int argc, char *argv[]) {
     }
 
     for (int i=0; i<args_d.size(); i++) check(clReleaseMemObject(args_d[i]), "memrelease");
-    for (int i=0; i<kernel_count; i++) check(clReleaseKernel(kernels[i]), "kernelrelease");
+    for (int i=0; i<kernel_count; i++) {
+        check(clReleaseKernel(kernels[i]), "kernelrelease");
+    }
     check(clReleaseProgram(program));
     check(clReleaseCommandQueue(q));
     check(clReleaseContext(context));
@@ -135,8 +137,7 @@ int main(int argc, char *argv[]) {
     delete[] il;
     delete[] pname;
     delete[] output;
-    for (int i=0; i<arg_names.size(); i++) {
-        delete[] arg_names[i];
-        delete[] inputs[i];
-    }
+    delete [] kernels;
+    for (int i=0; i<arg_names.size(); i++) delete[] arg_names[i];
+    for (int i=0; i<inputs.size(); i++) delete[] inputs[i];
 }

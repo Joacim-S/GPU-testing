@@ -1,4 +1,3 @@
-#include <ostream>
 #define CL_TARGET_OPENCL_VERSION 300
 #include<bits/stdc++.h>
 #include "fileutils.h"
@@ -15,11 +14,12 @@ void check(cl_int e, const char* what = ""){
 
 int main(int argc, char *argv[]) {
     if (argc < 2 || argc > 4) {
-        std::cout << "usage: atomic.cpp <strind: spv file path (required)> <int: concurrent kernels> <int: iterations>" << std::endl;
+        std::cerr << "usage: atomic.cpp <strind: spv file path (required)> <int: concurrent kernels> <int: iterations>" << std::endl;
         exit(1);
     }
+    //TODO: Flags and improved argument parsing
+    const bool profiling = false;
     std::string spvpath = argv[1];
-
     size_t kernel_count = argc > 2 ? atol(argv[2]): 1;
     size_t iterations = argc == 4 ? atol(argv[3]) : 1;
 
@@ -104,7 +104,7 @@ int main(int argc, char *argv[]) {
         }
     }
     
-    cl_queue_properties properties[] = { CL_QUEUE_PROPERTIES, CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE | CL_QUEUE_PROFILING_ENABLE, 0 };
+    cl_queue_properties properties[] = { CL_QUEUE_PROPERTIES, CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE | profiling * CL_QUEUE_PROFILING_ENABLE, 0 };
     cl_command_queue *queues = new cl_command_queue[kernel_count]; //Need several queus to get parallel execution. 1k works, 10k is too much.
     for (int i = 0; i < kernel_count; ++i) {
         queues[i] = clCreateCommandQueueWithProperties(context, device_id, properties, &ret);
@@ -120,7 +120,21 @@ int main(int argc, char *argv[]) {
     }
     std::cout << "Enqueued" << std::endl;
     clSetUserEventStatus(user_event, CL_COMPLETE);
-    std::cout << "Finished" << std::endl;
+    for (int i=0; i<kernel_count; i++) clFinish(queues[i]);
+    if (profiling) { //TODO: profling flag
+        long long start;
+        long long end = 0;
+        for (int i = 0; i < kernel_count; ++i) {
+            
+            clGetEventProfilingInfo(kernel_events[i], CL_PROFILING_COMMAND_START,
+                                    sizeof(start), &start, NULL);
+            std::cout << end - start << std::endl;
+            clGetEventProfilingInfo(kernel_events[i], CL_PROFILING_COMMAND_END,
+                                    sizeof(end), &end, NULL);
+        }
+    }
+
+
     for (int k=0; k<kernel_count; k++) {
         int ko = k * arg_count;
         std::cout << OUT << output << '\n';

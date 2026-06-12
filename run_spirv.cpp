@@ -1,5 +1,5 @@
 #define CL_TARGET_OPENCL_VERSION 300
-#include<bits/stdc++.h>
+#include <bits/stdc++.h>
 #include "fileutils.h"
 #include <vector>
 #include <CL/cl.h>

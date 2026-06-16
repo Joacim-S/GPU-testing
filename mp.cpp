@@ -1,4 +1,5 @@
 #define CL_TARGET_OPENCL_VERSION 200
+#define wls 64
 #include <filesystem>
 #include <iostream>
 #include <fstream>
@@ -129,11 +130,11 @@ int main(int argc, char *argv[]) {
     cl_kernel rkernel = clCreateKernel(result_program, rpname.data(), &ret);
     check(ret, "Create result kernel");
 
-    std::vector<uint> zeros(256 * workgroups, 0);
+    std::vector<uint> zeros(wls * workgroups, 0);
     std::vector<uint> args_h[5] = {zeros, zeros, zeros, zeros, zeros};
     cl_mem args_d[5];
     for (int i=0; i < 5; i++) {
-        args_d[i] = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, 256 * workgroups * sizeof(uint), args_h[i].data(), &ret);
+        args_d[i] = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, wls * workgroups * sizeof(uint), args_h[i].data(), &ret);
         check(ret, "Create buffer");
         check(clSetKernelArg(kernel, i, sizeof(cl_mem), &args_d[i]), "Set arg main");
     }
@@ -146,14 +147,14 @@ int main(int argc, char *argv[]) {
 
     cl_command_queue q = clCreateCommandQueueWithProperties(context, device_id, NULL, &ret);
     check(ret, "q");
-    size_t wlsize[1] {256};
-    size_t wgsize[1] {256 * 3 * workgroups};
-    size_t rwgsize[1] {256 * workgroups};
+    size_t wlsize[1] {wls};
+    size_t wgsize[1] {wls * 3 * workgroups};
+    size_t rwgsize[1] {wls * workgroups};
     for (int i=0; i<iterations; i++) {
         check(clEnqueueNDRangeKernel(q, kernel, 1, 0, wgsize, wlsize, 0, 0, 0), "launch kernel");
         check(clEnqueueNDRangeKernel(q, rkernel, 1, 0, rwgsize, wlsize, 0, 0, 0), "launch result kernel");
         for (int i=0; i < 4; i++) {
-            check(clEnqueueFillBuffer(q, args_d[i], args_h[0].data(), sizeof(uint), 0, 256 * workgroups, 0, 0, 0), "write");
+            check(clEnqueueFillBuffer(q, args_d[i], args_h[0].data(), sizeof(uint), 0, wls * workgroups, 0, 0, 0), "write");
         }
     }
     check(clEnqueueReadBuffer(q, results_d, true, 0, 4 * sizeof(uint), results_h, 0, 0, 0), "Read");

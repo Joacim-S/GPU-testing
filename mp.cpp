@@ -1,3 +1,6 @@
+#include <cmath>
+#include <cstddef>
+#include <sys/types.h>
 #define CL_TARGET_OPENCL_VERSION 200
 #define wls 64
 #include <filesystem>
@@ -5,6 +8,14 @@
 #include <fstream>
 #include <CL/cl.h>
 #include <vector>
+#include <random>
+
+struct {
+    uint target_lines = 2;
+    uint scratchpad_size = 1024;
+    uint stress_line_size = 64;
+    std::vector<uint> scratch_locations;
+} stressparams;
 
 static inline void check(cl_int e, const char* what = ""){
     if(e != CL_SUCCESS){
@@ -37,6 +48,23 @@ void read_source(std::string path, char* source, uint filesize) {
     fin.close();
 }
 
+void set_scratchlocations(std::mt19937 gen,
+    std::uniform_int_distribution<uint> distrib_regions,
+    std::uniform_int_distribution<uint> distrib_linesize,
+    uint scratch_num_regions,
+    uint workgroups) {
+    std::vector<bool> used_regions(scratch_num_regions, 0);
+    for (uint i=0; i < stressparams.target_lines; i ++) {
+        uint region = distrib_regions(gen);
+        while (used_regions[region]) region = distrib_regions(gen);
+        used_regions[region] = 1;
+        uint loc_in_region = distrib_linesize(gen);
+        for (uint j = i; j < workgroups; j += stressparams.target_lines) {
+            stressparams.scratch_locations[j] = region * stressparams.scratchpad_size + loc_in_region;
+        }
+    }
+}
+
 int main(int argc, char *argv[]) {
     if (argc < 2) {
         std::cerr << "Usage: mp <path_to_source>" << std::endl;
@@ -45,7 +73,8 @@ int main(int argc, char *argv[]) {
     std::string source_path = argv[1];
     std::string r_source_paht = argv[2];
     uint workgroups = argc > 3 ? atol(argv[3]) : 1;
-    uint iterations = argc > 4 ? atol(argv[4]) : 1; //Will need to add argument initialization
+    uint iterations = argc > 4 ? atol(argv[4]) : 1;
+    stressparams.scratch_locations.resize(workgroups);
 
     std::uintmax_t sourcesize = std::filesystem::file_size(source_path);
     std::string source(sourcesize, '*');
@@ -135,6 +164,9 @@ int main(int argc, char *argv[]) {
         check(ret, "Create buffer");
         check(clSetKernelArg(kernel, i, sizeof(cl_mem), &args_d[i]), "Set arg main");
     }
+    cl_mem scratch_locations_d = clCreateBuffer(context, CL_MEM_READ_WRITE, workgroups * sizeof(uint), NULL, &ret);
+    check(ret, "Create location buffer");
+    check(clSetKernelArg(kernel, 5, sizeof(cl_mem), &scratch_locations_d));
     uint results_h[4] = {0};
     cl_mem results_d = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, 4 * sizeof(uint), results_h, &ret);
     check(ret, "Create resultd");
@@ -147,7 +179,14 @@ int main(int argc, char *argv[]) {
     size_t wlsize[1] {wls};
     size_t wgsize[1] {wls * 3 * workgroups};
     size_t rwgsize[1] {wls * workgroups};
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    static const uint scratch_num_regions = stressparams.scratchpad_size / stressparams.stress_line_size;
+    std::uniform_int_distribution<uint> distrib_reg(0,scratch_num_regions);
+    std::uniform_int_distribution<uint> distrib_lz(0,stressparams.stress_line_size);
     for (int i=0; i<iterations; i++) {
+        set_scratchlocations(gen, distrib_reg, distrib_lz, scratch_num_regions, workgroups);
+        check(clEnqueueWriteBuffer(q, scratch_locations_d, true, 0, workgroups * sizeof(uint), stressparams.scratch_locations.data(), 0, 0, 0));
         check(clEnqueueNDRangeKernel(q, kernel, 1, 0, wgsize, wlsize, 0, 0, 0), "launch kernel");
         check(clEnqueueNDRangeKernel(q, rkernel, 1, 0, rwgsize, wlsize, 0, 0, 0), "launch result kernel");
         for (int i=0; i < 4; i++) {

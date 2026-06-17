@@ -21,10 +21,10 @@ static inline void check_build(cl_int e, cl_program program, cl_device_id device
         std::string log(len, '*');
         clGetProgramBuildInfo(program, device, CL_PROGRAM_BUILD_LOG, len, log.data(), NULL);
         std::cout << log.data() << std::endl;
-        std::exit(EXIT_FAILURE);
+        exit(EXIT_FAILURE);
     } else if (e != CL_SUCCESS) {
         std::cerr << "OpenCL build failed: " << e << std::endl;
-        std::exit(EXIT_FAILURE);
+        exit(EXIT_FAILURE);
     }
 }
 
@@ -80,7 +80,6 @@ int main(int argc, char *argv[]) {
         &ret);
     check(ret, "context");
 
-    std::cout << "creating programs" << std::endl;
     const char* psource = source.c_str();
     cl_program program = clCreateProgramWithSource(context,
         1,
@@ -110,8 +109,6 @@ int main(int argc, char *argv[]) {
         NULL,
         NULL),
         result_program, device_id);
-
-    std::cout << "Created program" << std::endl;
 
     //Get kernel name 
     size_t pname_size;

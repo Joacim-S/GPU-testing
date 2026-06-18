@@ -11,7 +11,6 @@ struct {
     uint target_lines = 2;
     uint scratchpad_size = 1024;
     uint stress_line_size = 64;
-    std::vector<uint> scratch_locations;
 } stressparams;
 
 static inline void check(cl_int e, const char* what = ""){
@@ -49,7 +48,8 @@ void set_scratchlocations(std::mt19937 gen,
     std::uniform_int_distribution<uint> distrib_regions,
     std::uniform_int_distribution<uint> distrib_linesize,
     uint scratch_num_regions,
-    uint workgroups) {
+    uint workgroups,
+    uint *map_buffer) {
     std::vector<bool> used_regions(scratch_num_regions, 0);
     for (uint i=0; i < stressparams.target_lines; i ++) {
         uint region = distrib_regions(gen);
@@ -57,7 +57,7 @@ void set_scratchlocations(std::mt19937 gen,
         used_regions[region] = 1;
         uint loc_in_region = distrib_linesize(gen);
         for (uint j = i; j < workgroups; j += stressparams.target_lines) {
-            stressparams.scratch_locations[j] = region * stressparams.stress_line_size + loc_in_region;
+            map_buffer[j] = region * stressparams.stress_line_size + loc_in_region;
         }
     }
 }
@@ -71,7 +71,6 @@ int main(int argc, char *argv[]) {
     std::string r_source_paht = argv[2];
     uint workgroups = argc > 3 ? atol(argv[3]) : 2;
     uint iterations = argc > 4 ? atol(argv[4]) : 1;
-    stressparams.scratch_locations.resize(workgroups);
 
     std::uintmax_t sourcesize = std::filesystem::file_size(source_path);
     std::string source(sourcesize, '*');
@@ -184,15 +183,18 @@ int main(int argc, char *argv[]) {
     std::uniform_int_distribution<uint> distrib_reg(0,(scratch_num_regions - 1));
     std::uniform_int_distribution<uint> distrib_lz(0,stressparams.stress_line_size);
     for (int i=0; i<iterations; i++) {
-        set_scratchlocations(gen, distrib_reg, distrib_lz, scratch_num_regions, workgroups);
-        check(clEnqueueWriteBuffer(q, scratch_locations_d, true, 0, workgroups * sizeof(uint), stressparams.scratch_locations.data(), 0, 0, 0));
-        check(clEnqueueNDRangeKernel(q, kernel, 1, 0, wgsize, wlsize, 0, 0, 0), "launch kernel");
+        uint *map_buffer = (uint*)clEnqueueMapBuffer(q, scratch_locations_d, CL_TRUE, CL_MAP_WRITE_INVALIDATE_REGION, 0, workgroups * sizeof(uint), 0, 0, 0, &ret);
+        check(ret, "map");
+        set_scratchlocations(gen, distrib_reg, distrib_lz, scratch_num_regions, workgroups, map_buffer);
+        cl_event unmap_event;
+        check(clEnqueueUnmapMemObject(q, scratch_locations_d, map_buffer, 0, NULL, &unmap_event), "unmap");
+        check(clEnqueueNDRangeKernel(q, kernel, 1, 0, wgsize, wlsize, 1, &unmap_event, 0), "launch kernel");
         check(clEnqueueNDRangeKernel(q, rkernel, 1, 0, rwgsize, wlsize, 0, 0, 0), "launch result kernel");
         for (int i=0; i < 4; i++) {
             check(clEnqueueFillBuffer(q, args_d[i], args_h[0].data(), sizeof(uint), 0, wls * workgroups, 0, 0, 0), "write");
         }
     }
-    check(clEnqueueReadBuffer(q, results_d, true, 0, 4 * sizeof(uint), results_h, 0, 0, 0), "Read");
+    check(clEnqueueReadBuffer(q, results_d, CL_TRUE, 0, 4 * sizeof(uint), results_h, 0, 0, 0), "Read");
     for (int i=0; i<4; i++) {
         std::cout << results_h[i] << std::endl;
     }

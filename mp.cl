@@ -1,8 +1,8 @@
 // clspv mp.cl --cl-std=CL2.0 --inline-entry-points --spv-version=1.6
 // spirv-dis a.spv > mp.spvasm
 
-static void do_stress(__global uint* scratchpad, uint group_id, uint* locations) {
-    for (uint i=0; i<1000; i++) {
+static void do_stress(__global uint* scratchpad, uint group_id, uint* locations, uint iterations) {
+    for (uint i=0; i<iterations; i++) {
         scratchpad[locations[group_id]] = i;
         scratchpad[locations[group_id]] = i + 1;
     }
@@ -18,5 +18,5 @@ __kernel void test(global atomic_uint* flag, global uint* data, global uint* r0,
         r0[id] = atomic_load_explicit(&flag[id], memory_order_relaxed);
         r1[id] = data[id];
     }
-    else do_stress(scratchpad, (group_id/3), locations);
+    else do_stress(scratchpad, (group_id/3), locations, 1024);
 }   

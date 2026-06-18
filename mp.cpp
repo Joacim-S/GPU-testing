@@ -193,7 +193,6 @@ int main(int argc, char *argv[]) {
         }
     }
     check(clEnqueueReadBuffer(q, results_d, true, 0, 4 * sizeof(uint), results_h, 0, 0, 0), "Read");
-    clFinish(q);
     for (int i=0; i<4; i++) {
         std::cout << results_h[i] << std::endl;
     }

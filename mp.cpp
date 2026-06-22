@@ -86,7 +86,7 @@ int main(int argc, char *argv[]) {
     cl_uint num_devices;
     cl_int ret;
 
-    //Create platfrom and context build program
+    //Create platfrom, context and queue and build programs
     check(clGetPlatformIDs(1, 
         &platform_id,
         &num_platforms), 
@@ -104,6 +104,8 @@ int main(int argc, char *argv[]) {
         NULL,
         &ret);
     check(ret, "context");
+    cl_command_queue q = clCreateCommandQueueWithProperties(context, device_id, NULL, &ret);
+    check(ret, "q");
 
     const char* psource = source.c_str();
     cl_program program = clCreateProgramWithSource(context,
@@ -135,7 +137,7 @@ int main(int argc, char *argv[]) {
         NULL),
         result_program, device_id);
 
-    //Get kernel name 
+    //Initialize kernels.
     size_t pname_size;
     check(clGetProgramInfo(program, CL_PROGRAM_KERNEL_NAMES, 0, NULL, &pname_size), "Program info size");
     std::vector<char> pname(pname_size);
@@ -152,19 +154,32 @@ int main(int argc, char *argv[]) {
     cl_kernel rkernel = clCreateKernel(result_program, rpname.data(), &ret);
     check(ret, "Create result kernel");
 
+    //Create memory areas for test locations
+    //TODO: Make this and other memory/argument initializatoin wotk on any test.
     std::vector<uint> zeros(wls * workgroups, 0);
-    std::vector<uint> args_h[5] = {zeros, zeros, zeros, zeros, zeros};
-    cl_mem args_d[5];
-    args_d[4] = clCreateBuffer(context, CL_MEM_READ_WRITE, stressparams.scratchpad_size * sizeof(uint), NULL, &ret);
-    check(clSetKernelArg(kernel, 4, sizeof(cl_mem), &args_d[4]), "Set arg main");
+    std::vector<uint> args_h[4] = {zeros, zeros, zeros, zeros};
+    cl_mem args_d[4];
     for (int i=0; i < 4; i++) {
         args_d[i] = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, wls * workgroups * sizeof(uint), args_h[i].data(), &ret);
         check(ret, "Create buffer");
         check(clSetKernelArg(kernel, i, sizeof(cl_mem), &args_d[i]), "Set arg main");
     }
+
+    //Initialize stress locations and memory
+    cl_mem scratchpad = clCreateBuffer(context, CL_MEM_READ_WRITE, stressparams.scratchpad_size * sizeof(uint), NULL, &ret);
+    check(clSetKernelArg(kernel, 4, sizeof(cl_mem), &scratchpad), "Set arg main");
     cl_mem scratch_locations_d = clCreateBuffer(context, CL_MEM_READ_WRITE, workgroups * sizeof(uint), NULL, &ret);
     check(ret, "Create location buffer");
     check(clSetKernelArg(kernel, 5, sizeof(cl_mem), &scratch_locations_d));
+    //Create random distributions for assigning stress locations
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    uint scratch_num_regions = stressparams.scratchpad_size / stressparams.stress_line_size;
+    std::uniform_int_distribution<uint> distrib_reg(0,(scratch_num_regions - 1));
+    std::uniform_int_distribution<uint> distrib_lz(0,stressparams.stress_line_size);
+
+    //Initialize memory for result kernel.
+    //TODO: Make this applicable to other tests.
     uint results_h[4] = {0};
     cl_mem results_d = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, 4 * sizeof(uint), results_h, &ret);
     check(ret, "Create resultd");
@@ -172,16 +187,10 @@ int main(int argc, char *argv[]) {
     check(clSetKernelArg(rkernel, 1, sizeof(cl_mem), &args_d[3]), "Set arg");
     check(clSetKernelArg(rkernel, 2, sizeof(cl_mem), &results_d), "set arg");
 
-    cl_command_queue q = clCreateCommandQueueWithProperties(context, device_id, NULL, &ret);
-    check(ret, "q");
     size_t wlsize[1] {wls};
     size_t wgsize[1] {wls * 3 * workgroups};
     size_t rwgsize[1] {wls * workgroups};
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    uint scratch_num_regions = stressparams.scratchpad_size / stressparams.stress_line_size;
-    std::uniform_int_distribution<uint> distrib_reg(0,(scratch_num_regions - 1));
-    std::uniform_int_distribution<uint> distrib_lz(0,stressparams.stress_line_size);
+
     for (int i=0; i<iterations; i++) {
         uint *map_buffer = (uint*)clEnqueueMapBuffer(q, scratch_locations_d, CL_TRUE, CL_MAP_WRITE_INVALIDATE_REGION, 0, workgroups * sizeof(uint), 0, 0, 0, &ret);
         check(ret, "map");

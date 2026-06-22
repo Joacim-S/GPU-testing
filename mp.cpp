@@ -9,7 +9,7 @@
 
 struct {
     uint target_lines = 2;
-    uint scratchpad_size = 1024;
+    uint scratchpad_size = 2048;
     uint stress_line_size = 64;
 } stressparams;
 

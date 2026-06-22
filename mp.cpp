@@ -64,7 +64,7 @@ void set_scratchlocations(std::mt19937 gen,
 
 int main(int argc, char *argv[]) {
     if (argc < 2) {
-        std::cerr << "Usage: mp <path_to_source>" << std::endl;
+        std::cerr << "Usage: mp <path_to_source> <test workgroups> <iterations>" << std::endl;
         return 1;
     }
     std::string source_path = argv[1];

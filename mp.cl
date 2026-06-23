@@ -28,5 +28,5 @@ __kernel void test(global atomic_uint* flag, global uint* data, global uint* r0,
         r0[id] = atomic_load_explicit(&flag[id], memory_order_relaxed);
         r1[id] = data[id];
     }
-    else do_stress(scratchpad, (group_id/3), locations, id);
+    else do_stress(scratchpad, (group_id/3), locations, 1024);
 }

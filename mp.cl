@@ -23,9 +23,9 @@ __kernel void test(global atomic_uint* flag, global uint* data, global uint* r0,
     do_stress(scratchpad, group_id/3, locations, 128);
     if (group_id % 3 == 1) {
         data[id] = 1;
-        atomic_store_explicit(&flag[id], 1, memory_order_relaxed);
+        atomic_store_explicit(&flag[id], 1, memory_order_relaxed); //memory_order_release or memory_order_relaxed
     } else if (group_id % 3 == 2) {
-        r0[id] = atomic_load_explicit(&flag[id], memory_order_relaxed);
+        r0[id] = atomic_load_explicit(&flag[id], memory_order_relaxed); //memory_order_acquire or memory_order_relaxed
         r1[id] = data[id];
     }
     else do_stress(scratchpad, (group_id/3), locations, 1024);

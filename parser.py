@@ -9,10 +9,21 @@
 import argparse
 
 class KernelArg():
-    def __init__(self, glob: bool, typ: str, name: str):
+    def __init__(self, glob: bool, typ: str = '', name: str = ''):
         self.glob = glob
         self.type = typ
         self.name = name
+    
+    def __str__(self):
+            return f'{self.name} global: {self.glob} type: {self.type}'
+    
+class Kernel():
+    def __init__(self, name: str, args: list[KernelArg] = []):
+        self.name = name
+        self.args = args
+
+    def __str__(self):
+        return f'{self.name}\n{'\n'.join([str(arg) for arg in self.args])}'
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
@@ -20,6 +31,29 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('-o', '--output')
     args = parser.parse_args()
     return args
+
+def parse_kernel_row(row: str) -> Kernel:
+    arg_objs = []
+    void = 'void'
+    name = row[row.find(void) + len(void) : row.find('(')].strip()
+    kernel_args = [arg.strip() for arg in row[1 + row.find('(') : row.find(')')].split(',')]
+    for arg in kernel_args:
+        arg = [a.strip() for a in arg.split(' ') if a.strip()]
+        if arg[0] in ('global', '__global'):
+            arg_obj = KernelArg(True)
+            arg.pop(0)
+        else:
+            arg_obj = KernelArg(False)
+        if arg[1].startswith('*'):
+            arg[0] += '*'
+            arg_obj.name = arg[1][1:]
+            if not arg_obj.name:
+                arg_obj.name = arg[2]
+        else:
+            arg_obj.name = arg[1]
+        arg_obj.type = arg[0]
+        arg_objs.append(arg_obj)
+    return Kernel(name, arg_objs)
 
 def main():
     output = """
@@ -41,23 +75,17 @@ def main():
 
     """
     args = parse_args()
-    arg_objs = set()
+    kernels = []
+
     with open(args.filename, 'r') as f:
         for row in f:
             r = row.strip()
             if r.startswith('__kernel'):
                 output += row
-                i = 0
-                while r[i] != '(':
-                    i += 1
-                i += 1
-                kernel_args = row[i:row.find(')')].split(', ')
-                for a in kernel_args:
-                    arg = a.split(' ')
-                    if arg[0] == 'global':
-                        arg_obj = KernelArg(True, arg[1], arg[2])
-                        arg_objs.add(arg_obj)
-    print(output)
+                kernels.append(parse_kernel_row(r))
+                continue
+            
+    print(kernels[0])
 
 
 if __name__ == '__main__':

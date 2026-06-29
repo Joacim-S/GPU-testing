@@ -72,20 +72,20 @@ def main():
             }
         }
     }
-
     """
     args = parse_args()
     kernels = []
 
-    with open(args.filename, 'r') as f:
-        for row in f:
-            r = row.strip()
-            if r.startswith('__kernel'):
-                output += row
-                kernels.append(parse_kernel_row(r))
-                continue
-            
-    print(kernels[0])
+    with open(args.filename, 'r') as in_ffile:
+        f = in_ffile.readlines()
+    depth = 0
+    for row in f:
+        r = row.strip()
+        if r.startswith('__kernel'):
+            output += row
+            kernel = parse_kernel_row(r)
+            kernels.append(kernel)
+            continue
 
 
 if __name__ == '__main__':

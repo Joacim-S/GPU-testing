@@ -200,7 +200,7 @@ int main(int argc, char *argv[]) {
         check(clEnqueueNDRangeKernel(q, kernel, 1, 0, wgsize, wlsize, 1, &unmap_event, 0), "launch kernel");
         check(clEnqueueNDRangeKernel(q, rkernel, 1, 0, rwgsize, wlsize, 0, 0, 0), "launch result kernel");
         for (int i=0; i < 4; i++) {
-            check(clEnqueueFillBuffer(q, args_d[i], args_h[0].data(), sizeof(uint), 0, wls * workgroups, 0, 0, 0), "write");
+            check(clEnqueueFillBuffer(q, args_d[i], args_h[0].data(), sizeof(uint), 0, wls * workgroups * sizeof(uint), 0, 0, 0), "write");
         }
     }
     check(clEnqueueReadBuffer(q, results_d, CL_TRUE, 0, 4 * sizeof(uint), results_h, 0, 0, 0), "Read");
